@@ -3,7 +3,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.security import get_current_user
+from app.core.auth import get_optional_user
 from app.routers.notifications import router
 
 
@@ -12,14 +12,14 @@ NOTIFICATION_ID = "44444444-4444-4444-4444-444444444444"
 
 
 class _User:
-    id = USER_ID
+    user_id = USER_ID
 
 
 def _client(authenticated: bool = True) -> TestClient:
     app = FastAPI()
     app.include_router(router)
     if authenticated:
-        app.dependency_overrides[get_current_user] = lambda: _User()
+        app.dependency_overrides[get_optional_user] = lambda: _User()
     return TestClient(app)
 
 

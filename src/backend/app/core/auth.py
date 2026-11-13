@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from supabase_auth.errors import AuthApiError
@@ -13,28 +13,21 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
-async def auth_middleware(request: Request, call_next):
-    token = request.cookies.get("access_token")
-    if token and token.startswith("Bearer "):
-        request.headers.__dict__["lists"].append(
-            (b"authorization", token.encode())
-        )
-    return await call_next(request)
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
     db: Session = Depends(get_db),
-) -> User:
+) -> User | None:
+    """Xác thực nếu có token; khách hoặc token không hợp lệ trả về None."""
+    if credentials is None:
+        return None
+
     try:
         response = supabase.auth.get_user(credentials.credentials)
-    except AuthApiError as error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Mã truy cập không hợp lệ hoặc đã hết hạn.",
-        ) from error
+    except AuthApiError:
+        return None
     except Exception as error:
         logger.exception(
             "Không gọi được Supabase Auth khi kiểm tra token (%s): %s",
@@ -48,10 +41,7 @@ def get_current_user(
 
     auth_user = response.user if response else None
     if auth_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Mã truy cập không hợp lệ hoặc đã hết hạn.",
-        )
+        return None
 
     db_user = (
         db.query(User)
@@ -65,6 +55,18 @@ def get_current_user(
         )
 
     return db_user
+
+
+def get_current_user(
+    user: User | None = Depends(get_optional_user),
+) -> User:
+    """Bắt buộc đăng nhập và trả về hồ sơ người dùng trong DB."""
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bạn cần đăng nhập với mã truy cập hợp lệ để thực hiện thao tác này.",
+        )
+    return user
 
 
 def require_approved_organizer(

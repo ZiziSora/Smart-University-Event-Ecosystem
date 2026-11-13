@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, call, patch
 from app.core.app_time import now_naive_local
 
 from app.services import event_service
-from app.services.event_services import get_filtered_events_service
+from backend.app.services.event_discover_services import get_filtered_events_service
 
 
 EVENT_ID = "11111111-1111-1111-1111-111111111111"

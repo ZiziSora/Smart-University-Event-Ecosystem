@@ -16,7 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.security import get_current_user
+from app.core.auth import get_optional_user
 from app.routers.events import router as events_router
 from app.schemas.event import EventOut
 
@@ -30,9 +30,9 @@ def _build_app():
     return app
 
 
-class _FakeSupabaseUser:
+class _FakeUser:
     def __init__(self, user_id: str):
-        self.id = user_id
+        self.user_id = user_id
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def client():
 @pytest.fixture
 def logged_in_client():
     app = _build_app()
-    app.dependency_overrides[get_current_user] = lambda: _FakeSupabaseUser(STUDENT_ID)
+    app.dependency_overrides[get_optional_user] = lambda: _FakeUser(STUDENT_ID)
     yield TestClient(app)
     app.dependency_overrides.clear()
 

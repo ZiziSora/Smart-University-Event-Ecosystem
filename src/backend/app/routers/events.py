@@ -1,10 +1,10 @@
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from supabase_auth.types import User
+from app.models.user import User
 
 from app.core.app_time import is_waitlist_open
-from app.core.security import get_current_user, require_current_user
+from app.core.auth import get_current_user, get_optional_user
 from app.schemas.event import EventOut
 from app.schemas.registration import RegisterResponseOut, RegistrationStatusOut
 from app.schemas.saved_event import (
@@ -18,7 +18,7 @@ from app.services import (
     registration_service,
     saved_event_service,
 )
-from app.services.event_services import get_filtered_events_service
+from backend.app.services.event_discover_services import get_filtered_events_service
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -53,9 +53,9 @@ def read_ongoing_events() -> list[EventOut]:
 
 @router.get("/saved", response_model=list[SavedEventOut])
 def read_saved_events(
-    current_user: User = Depends(require_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[SavedEventOut]:
-    return saved_event_service.list_saved_events(current_user.id)
+    return saved_event_service.list_saved_events(str(current_user.user_id))
 
 
 @router.get("/{event_id}", response_model=EventOut)
@@ -72,7 +72,7 @@ def read_event(event_id: str) -> EventOut:
 @router.get("/{event_id}/registration-status", response_model=RegistrationStatusOut)
 def read_registration_status(
     event_id: str,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ) -> RegistrationStatusOut:
     event = event_service.get_event_by_id(event_id)
     if not event:
@@ -83,7 +83,7 @@ def read_registration_status(
 
     count = registration_service.get_registration_count(event_id)
     reg_record = (
-        registration_service.find_registration(event_id, current_user.id, include_cancelled=True)
+        registration_service.find_registration(event_id, str(current_user.user_id), include_cancelled=True)
         if current_user
         else None
     )
@@ -101,7 +101,7 @@ def read_registration_status(
 @router.post("/{event_id}/register", response_model=RegisterResponseOut)
 def register_for_event(
     event_id: str,
-    current_user: User = Depends(require_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> RegisterResponseOut:
     event = event_service.get_event_by_id(event_id)
     if not event:
@@ -119,7 +119,7 @@ def register_for_event(
         )
 
     count = registration_service.get_registration_count(event_id)
-    active_reg = registration_service.find_registration(event_id, current_user.id, include_cancelled=False)
+    active_reg = registration_service.find_registration(event_id, str(current_user.user_id), include_cancelled=False)
     already_registered = active_reg is not None
 
     is_full = event.capacity is not None and count >= event.capacity
@@ -140,7 +140,7 @@ def register_for_event(
 
     was_already_registered = registration_service.register_user(
         event_id,
-        current_user.id,
+        str(current_user.user_id),
         event.title,
         registration_status=target_status,
         event_organizer_id=(
@@ -161,7 +161,7 @@ def register_for_event(
 @router.get("/{event_id}/saved-status", response_model=SavedEventStatusOut)
 def read_saved_status(
     event_id: str,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ) -> SavedEventStatusOut:
     event = event_service.get_event_by_id(event_id)
     if not event:
@@ -171,7 +171,7 @@ def read_saved_status(
         )
 
     saved = (
-        saved_event_service.is_event_saved(event_id, current_user.id)
+        saved_event_service.is_event_saved(event_id, str(current_user.user_id))
         if current_user
         else False
     )
@@ -181,7 +181,7 @@ def read_saved_status(
 @router.post("/{event_id}/save", response_model=SaveEventResponseOut)
 def bookmark_event(
     event_id: str,
-    current_user: User = Depends(require_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SaveEventResponseOut:
     event = event_service.get_event_by_id(event_id)
     if not event:
@@ -190,14 +190,14 @@ def bookmark_event(
             detail=f'Không tìm thấy sự kiện với ID "{event_id}".',
         )
 
-    already_saved = saved_event_service.save_event(event_id, current_user.id)
+    already_saved = saved_event_service.save_event(event_id, str(current_user.user_id))
     return SaveEventResponseOut(saved=True, already_saved=already_saved)
 
 
 @router.delete("/{event_id}/save", response_model=RemoveSavedEventResponseOut)
 def unbookmark_event(
     event_id: str,
-    current_user: User = Depends(require_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> RemoveSavedEventResponseOut:
-    removed = saved_event_service.remove_saved_event(event_id, current_user.id)
+    removed = saved_event_service.remove_saved_event(event_id, str(current_user.user_id))
     return RemoveSavedEventResponseOut(removed=removed)

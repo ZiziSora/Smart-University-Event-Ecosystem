@@ -28,7 +28,7 @@ def _full_event(days_until_start: float) -> EventOut:
 
 
 class _FakeUser:
-    id = "22222222-2222-2222-2222-222222222222"
+    user_id = "22222222-2222-2222-2222-222222222222"
 
 
 @pytest.fixture
